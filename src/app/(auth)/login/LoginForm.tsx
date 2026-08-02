@@ -9,6 +9,23 @@ import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Input';
 import { loginSchema, type LoginValues } from '@/lib/validation/auth';
 
+/*
+ * Client bundles only receive NEXT_PUBLIC_* variables, so this is a separate
+ * switch from the server's AUTH_DEBUG. Inlined at build time — flipping it in
+ * Vercel requires a redeploy.
+ */
+const DEBUG = process.env.NEXT_PUBLIC_AUTH_DEBUG === '1';
+
+/*
+ * Module scope, not inline in the handler: `react-hooks/purity` rejects a
+ * `Date.now()` call written inside a component body, even in an async event
+ * handler where it is harmless.
+ */
+function stopwatch(): () => number {
+  const started = Date.now();
+  return () => Date.now() - started;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,15 +45,38 @@ export function LoginForm() {
 
     // redirect:false so a failure re-renders this form with a message instead of
     // bouncing to Auth.js's default error page.
+    const elapsedMs = stopwatch();
     const result = await signIn('credentials', { ...values, redirect: false });
+    const elapsed = elapsedMs();
+
+    if (DEBUG) {
+      /*
+       * The error code is the diagnosis, and it is already in the response — the
+       * generic message below is what hides it:
+       *   "CredentialsSignin" → authorize() returned null: wrong password, no
+       *                         such account, or rate-limited.
+       *   "Configuration"     → authorize() threw, or AUTH_SECRET is missing.
+       *                         An unreachable database lands here, ~10s in.
+       * Elapsed time separates those two: a 10s wait is the Mongo server
+       * selection timeout from db.ts.
+       */
+      console.log('[debug:login] signIn result', { ...result, elapsedMs: elapsed });
+    }
 
     if (!result || result.error) {
       /*
        * Deliberately vague. The server cannot distinguish "no such account" from
        * "wrong password" in its response without telling an attacker which email
        * addresses are registered — so neither can this message.
+       *
+       * The appended code is safe to show: it reports how the request failed,
+       * never whether the account exists. Both null-return paths share one code.
        */
-      setFormError('Incorrect email or password.');
+      setFormError(
+        DEBUG
+          ? `Incorrect email or password. [${result?.error ?? 'no response'} · ${elapsed}ms]`
+          : 'Incorrect email or password.',
+      );
       return;
     }
 

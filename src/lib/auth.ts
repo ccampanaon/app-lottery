@@ -4,6 +4,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { User } from '@/models/User';
 import { authConfig } from './auth.config';
 import { connectToDatabase } from './db';
+import { debugLog, describeError } from './debug-log';
 import { checkRateLimit } from './rate-limit';
 import { loginSchema } from './validation/auth';
 
@@ -38,10 +39,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
 
       async authorize(credentials, request) {
+        debugLog('auth', 'authorize called', {
+          hasSecret: Boolean(process.env.AUTH_SECRET),
+          hasMongoUri: Boolean(process.env.MONGODB_URI),
+          authUrl: process.env.AUTH_URL ?? '(unset - correct on Vercel)',
+        });
+
         const parsed = loginSchema.safeParse(credentials);
         // Returning null is the only signal Auth.js accepts; every failure path
         // below is deliberately indistinguishable to the caller.
-        if (!parsed.success) return null;
+        if (!parsed.success) {
+          debugLog('auth', 'REJECTED: credentials failed schema validation', {
+            issues: parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
+          });
+          return null;
+        }
 
         const { email, password } = parsed.data;
 
@@ -58,25 +70,66 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           LOGIN_ACCOUNT_LIMIT,
           LOGIN_WINDOW_MS,
         );
-        if (!byAccount.allowed) return null;
+        if (!byAccount.allowed) {
+          debugLog('auth', 'REJECTED: account rate-limited', {
+            email,
+            retryAfterSeconds: byAccount.retryAfterSeconds,
+            hint: 'correct passwords are refused too until this expires',
+          });
+          return null;
+        }
 
         const ip = clientIp(request);
         if (ip) {
           const byIp = checkRateLimit(`login:ip:${ip}`, LOGIN_IP_LIMIT, LOGIN_WINDOW_MS);
-          if (!byIp.allowed) return null;
+          if (!byIp.allowed) {
+            debugLog('auth', 'REJECTED: IP rate-limited', {
+              ip,
+              retryAfterSeconds: byIp.retryAfterSeconds,
+            });
+            return null;
+          }
         }
 
-        await connectToDatabase();
+        try {
+          await connectToDatabase();
+        } catch (error) {
+          /*
+           * Rethrown, not swallowed. Auth.js turns a thrown error into a
+           * `CallbackRouteError`, which the client sees as error code
+           * "Configuration" — distinct from the "CredentialsSignin" a null
+           * return produces. That distinction is what tells a bad password
+           * apart from an unreachable database.
+           */
+          console.error('[auth] REJECTED: database unreachable', describeError(error));
+          throw error;
+        }
 
         const user = await User.findOne({ email }).select('+passwordHash');
 
         if (!user) {
+          debugLog('auth', 'REJECTED: no account with that email', {
+            email,
+            hint: 'seed this database, or check MONGODB_DB points where you seeded',
+          });
           await bcrypt.compare(password, DUMMY_HASH);
           return null;
         }
 
+        debugLog('auth', 'account found', {
+          email,
+          role: user.role,
+          hashPrefix: user.passwordHash?.slice(0, 7) ?? 'MISSING',
+          hashLength: user.passwordHash?.length ?? 0,
+        });
+
         const matches = await bcrypt.compare(password, user.passwordHash);
-        if (!matches) return null;
+        if (!matches) {
+          debugLog('auth', 'REJECTED: password does not match the stored hash', { email });
+          return null;
+        }
+
+        debugLog('auth', 'ACCEPTED', { email, role: user.role });
 
         return {
           id: user._id.toString(),

@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
+import { authDebugEnabled, describeError } from './debug-log';
 
 /** Route prefixes that require a session. */
 export const PROTECTED_PREFIXES = ['/dashboard', '/results', '/predictions'] as const;
@@ -22,6 +23,25 @@ export const authConfig = {
   },
   // Populated in auth.ts. Middleware only ever verifies an existing token.
   providers: [],
+
+  /*
+   * Auth.js swallows the real failure inside nested `cause` properties — a dead
+   * database arrives as CallbackRouteError → MongooseServerSelectionError, and
+   * a missing AUTH_SECRET as MissingSecret. The default logger prints only the
+   * outermost layer, which is never the useful one. `error` is always on;
+   * `debug` follows AUTH_DEBUG.
+   */
+  logger: {
+    error(error) {
+      console.error('[auth:error]', JSON.stringify(describeError(error)));
+    },
+    warn(code) {
+      console.warn('[auth:warn]', code);
+    },
+    debug(message, metadata) {
+      if (authDebugEnabled) console.log('[auth:debug]', message, metadata ?? '');
+    },
+  },
   callbacks: {
     jwt({ token, user }) {
       // `user` is only present on the sign-in pass; afterwards the token is reused.
