@@ -32,6 +32,7 @@ const STRATEGIES = [
   'weighted-random',
   'pairs',
   'markov',
+  'balanced-shape',
   'ensemble',
 ] as const;
 
@@ -214,6 +215,34 @@ describe('buildCooccurrence', () => {
   it('never records a number as co-occurring with itself', () => {
     const matrix = buildCooccurrence([{ numbers: [5, 6] }]);
     expect(matrix.get(5)?.get(5)).toBeUndefined();
+  });
+});
+
+describe('balancedShapeStrategy', () => {
+  it('only ever returns sets within the shape bounds', () => {
+    const sets = generateSets(history, { strategy: 'balanced-shape', count: 30, seed: 13 });
+
+    for (const set of sets) {
+      const sum = set.numbers.reduce((total, n) => total + n, 0);
+      const odd = set.numbers.filter((n) => n % 2 === 1).length;
+      const high = set.numbers.filter((n) => n > 35).length;
+      const decades = new Set(set.numbers.map((n) => Math.floor(n / 10))).size;
+      const spread = set.numbers[4] - set.numbers[0];
+      let consecutive = 0;
+      for (let i = 1; i < 5; i += 1) {
+        if (set.numbers[i] === set.numbers[i - 1] + 1) consecutive += 1;
+      }
+
+      expect(sum).toBeGreaterThanOrEqual(104);
+      expect(sum).toBeLessThanOrEqual(249);
+      expect(odd).toBeGreaterThanOrEqual(1);
+      expect(odd).toBeLessThanOrEqual(4);
+      expect(high).toBeGreaterThanOrEqual(1);
+      expect(high).toBeLessThanOrEqual(4);
+      expect(consecutive).toBeLessThanOrEqual(1);
+      expect(decades).toBeGreaterThanOrEqual(3);
+      expect(spread).toBeGreaterThanOrEqual(20);
+    }
   });
 });
 

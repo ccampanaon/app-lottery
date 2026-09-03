@@ -3,6 +3,7 @@ import type { Draw, Strategy } from '@/types';
 import { ensembleStrategy } from './ensemble';
 import { createRng, randomSeed } from './rng';
 import {
+  balancedShapeStrategy,
   buildCooccurrence,
   frequencyStrategy,
   markovStrategy,
@@ -18,6 +19,7 @@ export const GENERATORS: Record<Exclude<Strategy, 'neural'>, Generator> = {
   'weighted-random': weightedRandomStrategy,
   pairs: pairsStrategy,
   markov: markovStrategy,
+  'balanced-shape': balancedShapeStrategy,
   ensemble: ensembleStrategy,
 };
 

@@ -54,6 +54,19 @@ export function DrawHistoryRow({
   );
   const anyPowerballHit = coverageByStrategy.some((c) => c.powerballHit);
 
+  /*
+   * Pooled across every strategy's sets, shown separately from `bestCoverage`
+   * so it never reads as what a single ticket actually won — see the comment
+   * above. With 7 strategies x 5 sets in play, this number runs high on
+   * nearly every draw by breadth alone.
+   */
+  const pooledCoverage = actual
+    ? countCoverage(
+        entry.predictions.flatMap((p) => p.sets),
+        actual,
+      )
+    : null;
+
   return (
     <div className="border-border border-b last:border-0">
       <button
@@ -82,13 +95,21 @@ export function DrawHistoryRow({
 
         {/* Match count stays visible at every breakpoint — it is the one number
             worth seeing without expanding the row. */}
-        <span className="ml-auto shrink-0 sm:ml-0">
-          {actual ? (
-            <MatchCount
-              whiteHits={bestCoverage.whiteHits}
-              powerballHit={anyPowerballHit}
-              suffix="best"
-            />
+        <span className="ml-auto flex shrink-0 flex-wrap justify-end gap-1.5 sm:ml-0">
+          {actual && pooledCoverage ? (
+            <>
+              <MatchCount
+                whiteHits={bestCoverage.whiteHits}
+                powerballHit={anyPowerballHit}
+                suffix="best"
+              />
+              <MatchCount
+                whiteHits={pooledCoverage.whiteHits}
+                powerballHit={pooledCoverage.powerballHit}
+                suffix="pooled"
+                className="opacity-70"
+              />
+            </>
           ) : (
             <span className="text-muted-foreground text-xs">
               {entry.predictions.length} strateg{entry.predictions.length === 1 ? 'y' : 'ies'}
@@ -125,7 +146,8 @@ export function DrawHistoryRow({
                 {' · '}
                 <span className="italic">
                   &ldquo;covered&rdquo; counts distinct winning numbers across a strategy&rsquo;s
-                  sets; only a single line wins a prize
+                  sets, &ldquo;pooled&rdquo; across every strategy&rsquo;s; only a single line wins
+                  a prize
                 </span>
               </>
             )}

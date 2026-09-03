@@ -2,6 +2,7 @@ import { WHITE_BALL_COUNT } from '@/lib/constants';
 import { computeStats } from '@/lib/stats';
 import { sampleWithoutReplacement, samplePowerball } from './rng';
 import {
+  balancedShapeStrategy,
   frequencyStrategy,
   markovStrategy,
   overdueStrategy,
@@ -16,6 +17,7 @@ const VOTERS: { generator: Generator; weight: number }[] = [
   { generator: overdueStrategy, weight: 1 },
   { generator: pairsStrategy, weight: 1 },
   { generator: markovStrategy, weight: 0.8 },
+  { generator: balancedShapeStrategy, weight: 0.8 },
   { generator: weightedRandomStrategy, weight: 0.6 },
 ];
 

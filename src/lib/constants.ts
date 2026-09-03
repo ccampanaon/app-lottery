@@ -29,6 +29,7 @@ export const PREDICTION_STRATEGIES = [
   'weighted-random',
   'pairs',
   'markov',
+  'balanced-shape',
   'neural',
   'ensemble',
 ] as const;
@@ -39,6 +40,7 @@ export const STRATEGY_LABELS: Record<(typeof PREDICTION_STRATEGIES)[number], str
   'weighted-random': 'Weighted random',
   pairs: 'Frequent pairs',
   markov: 'Positional Markov',
+  'balanced-shape': 'Balanced shape',
   neural: 'Neural net (TensorFlow.js)',
   ensemble: 'Ensemble',
 };
